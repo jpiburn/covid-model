@@ -1,6 +1,6 @@
 #ROOT <- '/home/nnagle/Dropbox/students/Piburn/covid-model'
-source('analysis-reformat/00-PARAMS.R')
-source('analysis-reformat/00-functions.R')
+source('analysis/00-PARAMS.R')
+source('analysis/00-functions.R')
 
 # This uses the future library and furrr package for multithreading.
 # I use availableCores()-4 on my own machine

@@ -8,7 +8,7 @@ library(doParallel)
 library(covidmodeldata)
 ################################################################################
 
-source('analysis-reformat/00-PARAMS.R')
+source('analysis/00-PARAMS.R')
 
 if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
 
@@ -348,7 +348,7 @@ for(i in 1:length(state_list)){
 # COMPILE MODEL
 # Negative Binomial with Gaussian Random Walk on slope
 
-stan_mod <- stan_model(file='analysis-reformat/nb1_spline.stan', model_name='nb1_spline')
+stan_mod <- stan_model(file='analysis/nb1_spline.stan', model_name='nb1_spline')
 
 
 

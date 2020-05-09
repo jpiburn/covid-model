@@ -7,8 +7,8 @@
 #    - Ysim - simulated cases and quantiles
 
 
-source('analysis-reformat/00-PARAMS.R')
-source('analysis-reformat/00-functions.R')
+source('analysis/00-PARAMS.R')
+source('analysis/00-functions.R')
 # Uses zoom_stan()
 
 library(tidyverse)

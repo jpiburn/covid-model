@@ -28,7 +28,8 @@ read_stan_draws <- function(files, par_select, warmup = 500) {
     mutate(.chain=1:n()) %>%
     mutate(
      # samples = map(.x = files, ~vroom_stan(.x, col_select=!!par_enquo))
-      samples = map(.x = files, ~fread_stan(.x, col_select = par_select))
+      samples = map(.x = files, ~fread_stan(.x, col_select = !!par_enquo))
+      #samples = map(.x = files, ~fread_stan(.x, col_select = par_select))
       ) %>%
     mutate(
       samples = map(.x=samples, ~mutate(.x,.iteration=1:n()))
@@ -36,19 +37,19 @@ read_stan_draws <- function(files, par_select, warmup = 500) {
     unnest(cols=samples) %>%
     mutate(.draw = 1:n()) %>%
     filter(.iteration > warmup) %>%
+    select(-files) %>%
     select(
       .draw, 
       .chain, 
       .iteration, 
-      !!par_enquo
+      everything(),
       ) %>%
-    ungroup() %>%
+    ungroup()  %>% 
     pivot_longer(
-      cols = !!par_enquo,
+      cols = !c(.draw, .chain, .iteration),
       names_to = '.variable', 
       values_to = '.value'
-      )
-  
+    )
   
   return(samples)
 }
@@ -106,7 +107,7 @@ calculate_rhat <- function(samples, warmup = 0, par) {
     summarize(
       max_rhat = max(rhat),
       which_max = .variable[which.max(rhat)],
-      q99_rhat = quantile(rhat, .99),
+      q99_rhat = quantile(rhat, .99, na.rm=TRUE),
       frac_gt_101 = mean(rhat > 1.01)
       )
   
@@ -211,7 +212,7 @@ read_and_summarize <- function(files, par_select, warmup = 0,  k = NULL) {
     summarize(
       max_rhat = max(rhat),
       which_max = .variable[which.max(rhat)],
-      q99_rhat = quantile(rhat, .99),
+      q99_rhat = quantile(rhat, .99, na.rm=TRUE),
       frac_gt_101 = mean(rhat > 1.01)
       )
   
@@ -245,7 +246,8 @@ vroom_stan <- function(file, ...) {
 
 fread_stan <- function(file, col_select, ...) {
   require(tidyselect)
-  col_expr <- rlang::expr(col_select)
+  #col_expr <- rlang::expr(all_of(col_select))
+  col_enquo <- rlang::expr(col_select)
   
   # was having trouble getting vroom_stan() to work on windows machine (what the current VM is)
   # same idea as vroom_stan, but avoids making the tmp file
@@ -255,12 +257,13 @@ fread_stan <- function(file, col_select, ...) {
   grepcmd <- paste0("grep -vh '^#' ", file)
   
   col_names <- data.table::fread(cmd = grepcmd, sep = ",", nThread = 1, nrows = 0)
-  col_select <- tidyselect::eval_select(col_expr, col_names)
-  names(col_select) <- NULL
+  #col_select <- tidyselect::eval_select(col_expr, col_names)
+  col_nums <- tidyselect::eval_select(col_enquo, col_names)
+  names(col_nums) <- NULL
   
   # set nthread to 1 below,  because this may be called by future_map
   out <- data.table::fread(cmd = grepcmd, sep = ",", nThread = 1, 
-                           colClasses = "numeric", select = all_of(col_select), 
+                           colClasses = "numeric", select = col_nums, 
                            ...)
 
   out <- tibble::as_tibble(out)

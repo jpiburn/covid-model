@@ -1,0 +1,30 @@
+FROM rocker/geospatial:3.6.3
+LABEL maintainer="Jesse Piburn <piburnjo@ornl.gov>"
+
+# Install 
+RUN apt-get -y install \
+    liblapack-dev \
+    libblas-dev \
+    libboost-dev \
+    libopenblas-dev \
+    libeigen3-dev \
+    && install2.r --error \
+        StanHeaders \
+        rstan \
+        tidybayes \
+        data.table \
+        foreach \
+        doParallel \
+        furrr \
+    && R -e "remotes::install_github('nset-ornl/covidmodeldata');"
+    
+
+COPY . /home/rstudio/
+
+
+# docker run --detach --publish 8787:8787 --volume /home/cades:/home/rstudio/covid-model/cades --env USER=cades --env PASSWORD=password --env ROOT=TRUE rstan/covid
+
+
+
+
+# docker run --rm -it --volume /home/cades:/home/rstudio/covid-model/cades --env USER=cades --env PASSWORD=password --env ROOT=TRUE rstan/covid /bin/bash

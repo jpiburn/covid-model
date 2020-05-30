@@ -1,22 +1,17 @@
-#library(sf)
+library(sf)
 library(tidyverse)
-#library(lubridate)
+library(lubridate)
 library(rstan)
-#library(tidybayes)
+library(tidybayes)
 library(foreach)
 library(doParallel)
 library(covidmodeldata)
 ################################################################################
 
-<<<<<<< HEAD:analysis/01-run_all_states.R
-source('analysis/00-PARAMS.R')
-=======
 source('analysis-reformat/00-PARAMS.R')
-source('analysis-reformat/00-proc_covid.R')
-source('analysis-reformat/00-proc_county.R')
->>>>>>> 2ee1cab68b71396a78681b4837306c98a7d49132:analysis-reformat/01-run_all_states.R
+NNODES <- NCHAINS
 
-#if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
+if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
 
 if (is.null(NYT_FILE)) {
   
@@ -27,31 +22,197 @@ if (is.null(NYT_FILE)) {
 nyt_data <- mutate(nyt_data, date=as_date(date))
 
 
-covid_df <- proc_covid(
-  raw_data = nyt_data %>% select(geoid, date, total_cases=total_cases_mdl),
-  DATE_0 = DATE_0,
-  ZERO_PAD = ZERO_PAD
-)
-
-
 if (is.null(ACS_FILE)) {
   acs_data <- acs_data # from the covidmodeldata package 
-} else {acs_data <- readr::read_rds(ACS_FILE)}
+  } else {acs_data <- readr::read_rds(ACS_FILE)}
+  
+geodf <- acs_data
+
+
+#####################################################
+# Calculate the first day of record for each county
+first_day_df <- nyt_data %>%
+  group_by(geoid) %>%
+  summarize(first_date = min(date))
+
+#####################################################
+# Create date, geoid, and geoid/date templates
+last_data_day <- max(nyt_data$date)
+date_df <- tibble(date = as_date(seq.Date(from = as_date(DATE_0),
+                                          to = last_data_day + TPRED,
+                                          by = 1)))
+county_df <- acs_data %>%
+  st_drop_geometry() %>%
+  select(geoid) %>%
+  arrange(geoid)
+
+geo_date_template <- crossing(county_df, date_df)
+
+#####################################################
+# Clean covid data and add zero records for one week prior to first observation
+covid_df <- geo_date_template %>%
+  left_join(first_day_df, by='geoid') %>%
+  left_join(nyt_data, by=c('geoid', 'date') ) %>%
+  filter(date >= (first_date - ZERO_PAD)) %>%
+  mutate(new_cases_mdl = ifelse(date < first_date, 0, new_cases_mdl)) %>%
+  select(geoid, date, total_cases:new_deaths_mdl)
+  
+################################################
+# There are some negatives in the cases.
+# These appear to be corrections to previous records. For now, just delete them. It will create some bias
+covid_df <- covid_df %>%
+  mutate(new_cases_mdl = pmax(new_cases_mdl, 0))
+
+################################################
+# Add DC to Maryland
+covid_df <- covid_df %>%
+  mutate(mygeoid = ifelse(geoid=='11001', '24XDC', geoid))
+
+
+################################################
+# Create a sequential county id:
+county_i_df <- covid_df %>%
+  select(mygeoid, geoid) %>%
+  mutate(mystate=substring(mygeoid,1,2)) %>%
+  group_by(mygeoid) %>%
+  filter(row_number()==1) %>%
+  ungroup() %>%
+  group_by(mystate) %>%
+  mutate(i=row_number())
+  
+county_df <- 
+  county_df %>%
+  left_join(
+    county_i_df,
+    by='geoid')
+  
+
+
+##################################################
+# Create a time index
+date_df <- date_df %>%
+  mutate(t = as.integer(1 + date - as_date(DATE_0)))
+
+
+##################################################
+# Create a metro code within each state:
+# Our metro hierarchy will be a metro/nonmetro, then by csa within metros
+# Csa do include micropolitans, but we'll exclude those from metro
+# First, recode metros to try to delete one county groups
+metro_recode_df <-
+  county_df %>% 
+  select(geoid, mygeoid, mystate) %>%
+  na.omit() %>%
+  left_join(
+    geodf %>% 
+      st_drop_geometry()  %>%
+      select(geoid, state_fips, csa_code, csa_title, metro = metropolitan_micropolitan_statistical_area),
+    by = c('geoid')
+  ) %>%
+  mutate(
+    metro = forcats::fct_explicit_na(metro) == 'Metropolitan Statistical Area'
+    ) %>%
+  # Change Connecticut, whch has one non-metro county (Litchfield) to metro.
+  mutate(metro = if_else(mygeoid == '09005', TRUE, metro)) %>%
+  mutate(
+    my_metro_code= as.character(forcats::fct_explicit_na(csa_code, na_level='998'))
+    )  %>%
+  mutate(
+    my_metro_title = if_else(is.na(csa_title), 'not_csa', csa_title)
+    ) %>% 
+  mutate(
+    my_metro_code = ifelse(metro, my_metro_code, '999')
+    ) %>%
+  mutate(
+    my_metro_title = if_else(metro, my_metro_title, 'not_metro')
+  ) %>%
+  # Calculate number of counties in each group
+  group_by(
+    mystate, 
+    my_metro_code, 
+    my_metro_title) %>%
+  mutate(
+    num_counties = n()) %>%
+  ungroup()   %>%
+  # Recode any csas with only one or two counties
+  mutate(
+    my_metro_code = ifelse(metro & num_counties <= 2, '998', my_metro_code),
+    my_metro_title = ifelse(metro & num_counties <= 2, 'not_csa', my_metro_title),
+    ) %>%
+  # ReCalculate number of counties in each group
+  group_by(
+    mystate, 
+    my_metro_code, 
+    my_metro_title) %>%
+  mutate(
+    num_counties = n()) 
+
+
+
+# Create a dataset with one row per metro area, and a unique id 'j'
+metro_j_df <- metro_recode_df %>%
+  # Summarize csas
+  group_by(
+    mystate, 
+    my_metro_title, 
+    my_metro_code) %>%
+  summarize(
+    n=n()) %>%
+  # give index values
+  arrange(mystate, my_metro_code) %>%
+  group_by(
+    mystate) %>%
+  mutate(
+    j = row_number()
+  ) 
+
+# Add j back to the county database
+metro_recode_df <- metro_recode_df %>%
+  left_join(
+    metro_j_df,
+    by = c('mystate', 'my_metro_code', 'my_metro_title')) %>%
+  select(
+    geoid, 
+    mygeoid, 
+    mystate,
+    metro,
+    my_metro_code,
+    my_metro_title,
+    j
+  ) %>%
+  # set j=0 if non-metro
+  mutate(group1 = ifelse(metro, j, 0)) %>%
+  mutate(group2 = 2-as.numeric(metro))
 
   
-county_df <- proc_county(
-  raw_data = acs_data,
-  geoid.list = unique(covid_df$geoid)
-)
 
-covid_df <- remove_prisons(covid_df, county_df)
+county_df <-
+  county_df %>%
+  left_join(
+    metro_recode_df,
+    by=c('geoid','mygeoid','mystate'))
 
-date_df <- tibble(
-  date = seq.Date(from=as.Date(DATE_0),
-                  t = max(covid_df$date)+TPRED,
-                  by=1)
-  ) %>% 
-  mutate(t = as.integer(date-as.Date(DATE_0)+1))
+  
+#####################################################
+# Add population and income metro status back to the county 
+county_df <- county_df %>%
+  left_join(acs_data %>% 
+              st_drop_geometry() %>%
+              select(
+                geoid, 
+                state_name, 
+                county_name, 
+                pop = acs_total_pop_e, 
+                inc = acs_median_income_e,
+                age = acs_median_age_e),
+            by = 'geoid') 
+
+
+# Rearrange for convenience
+covid_df <- covid_df %>%
+  select(geoid, mygeoid, date, everything())
+
+
 
 
 ###################################################
@@ -115,18 +276,20 @@ save(covid_df, county_df, X_dow, Z, date_df,
 
 # Step 1. get a list of states from the NYT file, 
 # and order from most counties to least.
-state_list <- county_df %>%
-  group_by(mystate) %>%
+state_list <- nyt_data %>%
+  group_by(state_fips) %>%
   distinct(county_name) %>%
-  summarize(n=n())  %>%
+  summarize(n=n()) %>%
+  filter(!(state_fips %in%  c('11'))) %>% # DC 
+  filter(!is.na(state_fips)) %>%
   arrange(desc(n)) %>%
-  pull(mystate)
+  pull(state_fips)
 
 #state_list <- state_list[c(20:25)]
 
 #state_list <- c('15','44','02','56','30')
 
-if(TN_ONLY) state_list <- '47'
+state_list = '47'
 
 
 #####################################################
@@ -155,8 +318,10 @@ for(i in 1:length(state_list)){
   # Pull out covid data for this state and attribute with i, j, and t
   this_covid_df <- covid_df %>%
     filter(geoid %in% this_county_df$geoid) %>%
-    left_join(this_county_df %>% select(geoid, i, group1, group2),
-              by = 'geoid')
+    left_join(this_county_df %>% select(geoid, i, j),
+              by = 'geoid') %>%
+    left_join(date_df %>% select(date, t), 
+              by='date')
   
   
   # Create the county-level regression data matrix
@@ -166,39 +331,41 @@ for(i in 1:length(state_list)){
       i, 
       group1,
       group2,
-      pop
+      pop, 
+      inc
       ) %>%
     mutate(
       pop_s = as.vector(scale(pop)),
+      inc_s = as.vector(scale(inc)),
       lpop_s = as.vector(scale(log(pop)))
       )
   
   
   stan_data <- list(Pop    = Xdf %>% pull(pop),
-                    Y      = this_covid_df %>% filter(Y>0) %>% pull(Y), # using modeled cases
-                    Y_i    = this_covid_df %>% filter(Y>0) %>% pull(i),
-                    Y_t    = this_covid_df %>% filter(Y>0) %>% pull(t),
-                    Y0_i   = this_covid_df %>% filter(Y==0) %>% pull(i),
-                    Y0_t   = this_covid_df %>% filter(Y==0) %>% pull(t),
+                    Y      = this_covid_df %>% filter(new_cases_mdl>0) %>% pull(new_cases_mdl), # using modeled cases
+                    Y_i    = this_covid_df %>% filter(new_cases_mdl>0) %>% pull(i),
+                    Y_t    = this_covid_df %>% filter(new_cases_mdl>0) %>% pull(t),
+                    Y0_i   = this_covid_df %>% filter(new_cases_mdl==0) %>% pull(i),
+                    Y0_t   = this_covid_df %>% filter(new_cases_mdl==0) %>% pull(t),
                     I      = max(this_covid_df$i),
                     T      = max(date_df$t),
-                    N      = nrow(this_covid_df %>% filter(Y>0) ),
-                    N0     = nrow(this_covid_df %>% filter(Y==0) ),
+                    N      = nrow(this_covid_df %>% filter(new_cases_mdl>0) ),
+                    N0     = nrow(this_covid_df %>% filter(new_cases_mdl==0) ),
                     K      = 1,
                     X      = Xdf %>% select(lpop_s),
                     X_dow  = X_dow,
                     spl_K  = SPL_K,
                     Z_spl  = Z,
                     J1     = if(max(this_county_df$group1)>1) max(Xdf$group1) else 0,
-                    J2     = if(max(this_county_df$group2)>1) max(Xdf$group2) else 0,
+                    J2     = max(Xdf$group2),
                     group1 = if(max(this_county_df$group1)>1) Xdf %>% pull(group1) else  rep(0, nrow(Xdf)),
-                    group2 = if(max(this_county_df$group2)>1) Xdf %>% pull(group2) else  rep(0, nrow(Xdf)),
+                    group2 = Xdf %>% pull(group2),
                     taub0_scale = .5*sd_scale,
                     taub1_scale = .5*sd_scale,
                     taub2_scale = sd_scale,
                     sample_flag = TRUE,
-                    lppd_flag = FALSE,
-                    post_pred = FALSE
+                    lppd_flag = TRUE,
+                    post_pred = TRUE
   )
   
   for(j in 1:NCHAINS){
@@ -219,7 +386,7 @@ for(i in 1:length(state_list)){
 # COMPILE MODEL
 # Negative Binomial with Gaussian Random Walk on slope
 
-stan_mod <- stan_model(file='analysis/nb1_spline.stan', model_name='nb1_spline')
+stan_mod <- stan_model(file='analysis-reformat/nb1_spline.stan', model_name='nb1_spline')
 
 
 

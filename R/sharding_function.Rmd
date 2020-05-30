@@ -1,0 +1,100 @@
+---
+title: "Sharding Function"
+output: html_document
+---
+
+Create data
+```{r}
+library(tidyverse)
+library(covidmodeldata)
+
+source('../analysis-reformat/00-PARAMS.R')
+source('../analysis-reformat/00-proc_covid.R')
+source('../analysis-reformat/00-proc_county.R')
+
+if (is.null(NYT_FILE)) {
+  
+  nyt_data <- get_nyt() %>%
+    format_nyt(skip_assignment = c("09","44")) # don't assign Rhode Island cases 
+  
+} else nyt_data <- read_csv(NYT_FILE)
+nyt_data <- mutate(nyt_data, date=as_date(date))
+
+
+covid_df <- proc_covid(
+  raw_data = nyt_data %>% select(geoid, date, total_cases=total_cases_mdl),
+  DATE_0 = DATE_0,
+  ZERO_PAD = ZERO_PAD
+)
+
+
+if (is.null(ACS_FILE)) {
+  acs_data <- acs_data # from the covidmodeldata package 
+} else {acs_data <- readr::read_rds(ACS_FILE)}
+
+  
+county_df <- proc_county(
+  raw_data = acs_data,
+  geoid.list = unique(covid_df$geoid)
+)
+
+covid_df <- remove_prisons(covid_df, county_df)
+
+```
+
+Merge the hierarchy into the covid data
+```{r}
+shard_df <- 
+  covid_df %>%
+  left_join(
+    county_df %>%
+      select(geoid,
+             mygeoid, mystate,
+             state_name, 
+             i, county_name, 
+             group1, group1_name, 
+             group2,group2_name)) %>%
+  group_by(geoid, mygeoid, mystate, state_name, i, county_name, group1, group1_name, group2, group2_name) %>%
+  summarize(n=n()) %>%
+  ungroup()
+
+```
+
+We need to add a column 'shard' with a number from 1:NSHARD.
+
+FUNCTION shard_df
+
+  - inputs: 
+    - data_frame with at least columns mystate, i, group1, group2, n
+    - NSHARD: integer: number of shards to create (possibly 1, probably <= 10)
+  - output: a vector, one entry per row, with an intger in 1:NSHARD for the shard number
+
+Hierarchy:
+
+group2 is 1 or 2,
+if group2==1, then group1 > 0
+if group2==2, then group1 == 0
+
+Some states may not have a group2==2
+
+Sharding rules.
+
+- don't mix different levels of group2 in a shard
+- if group1 > 0 , don't split a group
+- if group1 == 0 (group2==2), doesn't have to be same shard.
+
+
+- Try to equalize sum(n) across all shards
+
+A strategy that might work is calculate cumsum(n), then calculate quantiles of cumsum (to get approximately the same n in each group).
+
+
+
+
+
+
+
+
+
+
+

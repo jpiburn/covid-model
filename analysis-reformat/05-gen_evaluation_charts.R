@@ -103,12 +103,12 @@ df_forecast %>%
 
 
 df_forecast_map <- df_forecast %>% 
-  group_by(geoid, state_name, county_name) %>% 
+  #group_by(geoid, state_name, county_name) %>% 
   summarise(
     int_90 = mean(new_cases >= Ysim_q05 & new_cases <= Ysim_q95), 
     int_70 = mean(new_cases >= Ysim_q15 & new_cases <= Ysim_q85), 
     int_50 = mean(new_cases >= Ysim_q25 & new_cases <= Ysim_q75)
-  ) %>%
+  ) %>% View()
 
   
   

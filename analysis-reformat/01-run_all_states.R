@@ -13,7 +13,7 @@ source('analysis-reformat/00-functions.R')
 source('analysis-reformat/00-proc_covid.R')
 source('analysis-reformat/00-proc_county.R')
 
-#if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
+if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
 
 if (is.null(NYT_FILE)) {
   
@@ -36,7 +36,8 @@ covid_df <- proc_covid(
   DATE_0 = DATE_0,
   ZERO_PAD = ZERO_PAD
 ) %>%
-  left_join(nyt_data %>% select(geoid, date, new_cases))
+  left_join(nyt_data %>% select(geoid, date, new_cases)) %>%
+  filter(date <= min(as_date(DATE_N), as_date(DATE)))
 
 
 if (is.null(ACS_FILE)) {
@@ -90,6 +91,10 @@ T <- as.integer(max(covid_df$date)-as_date(DATE_0)+1)
 
 L <- pracma::tril(toeplitz(c(1,-2,1, rep(0, T+TPRED-4 ))))
 
+#D <- 1+10*exp(-3/14*seq(1,nrow(L)))
+#D <- diag(rev(pmin(seq(from=1/28,by=1/28, length.out=nrow(L)),1)))
+
+#L <- L %*% diag(D)
 # D11 <- (Dbig%*%t(Dbig))[1:(NTIME-1-TPRED),1:(NTIME-1-TPRED)]
 # D12 <- (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1),1:(NTIME-1-TPRED)]
 # D22 = (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1), (NTIME-1-TPRED+1):(NTIME-1)]
@@ -126,7 +131,7 @@ krig_wt <- rbind(0, krig_wt)
 # variance on last day is:
 max_var <- Cov[T,T]
 # sd that should give us log(10^4) change  
-sd_scale <- log(10^4) / sqrt(max_var)
+sd_scale <- log(10^2) / sqrt(max_var)
   
   
 if(!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive=TRUE)
@@ -154,7 +159,7 @@ state_list <- county_df %>%
 #state_list <- state_list[c(20:25)]
 
 #state_list <- c('15','44','02','56','30')
-state_list <- '09'
+#state_list <- '09'
 
 if(TN_ONLY) state_list <- '47'
 

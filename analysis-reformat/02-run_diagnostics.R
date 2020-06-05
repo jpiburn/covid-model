@@ -1,6 +1,7 @@
 #ROOT <- '/home/nnagle/Dropbox/students/Piburn/covid-model'
 #source('analysis-reformat/00-PARAMS.R')
-source('/data/covid/tmp/2020-05-24/00-PARAMS.R')
+DATE <- '2020-06-02'
+source(file.path('/data/covid/tmp', DATE, '00-PARAMS.R'))
 source('analysis-reformat/00-functions.R')
 
 # This uses the future library and furrr package for multithreading.
@@ -29,6 +30,17 @@ plan(cluster, workers = cl)
 
 ###############################################################
 # Calculate diagnostics
+
+# How to remove a thread
+#bad_chains <- list(c('54','3'))
+if(!is.null(bad_chains)){
+for(i in 1:length(bad_chains)){
+  chain <- 
+  from_file <- sprintf('/data/covid/tmp/%s/%s/samples_grw_%s.csv',DATE,bad_chains[[i]][1],bad_chains[[i]][2])
+  to_file <- sprintf('/data/covid/tmp/%s/%s/BAD_samples_grw_%s.csv_BAD',DATE,bad_chains[[i]][1],bad_chains[[i]][2])
+  file.rename(from_file, to_file)
+}
+}
   
 # Evaluate Rhat for the parameter bo_raw
 # using all chains
@@ -37,14 +49,15 @@ diagnostic_df <-
     State = strsplit(FIPS, split=' ')[[1]]) %>%
   mutate(
     files = future_map(.x=State, 
-                       ~get_sample_paths(.x, DATA_DIR))) %>%
+                       ~get_sample_paths(.x, DATA_DIR)))
+diagnostic_df <- diagnostic_df %>%
   filter(map_lgl(diagnostic_df$files, function(x) (length(x)>0)))
 
 diagnostic_df <- diagnostic_df %>%
   mutate(
     diag = future_map(.x=files, 
                       ~read_and_diagnose(.x, 
-                                         warmup=WARMUP, 
+                                         warmup=WARMUP/NTHIN, 
                                          par_select=c(starts_with('phi'),
                                                       starts_with('tau'),
                                                       starts_with('log_lambda')))))
@@ -70,7 +83,8 @@ diagnostic_df %>%
 diagnostic_df %>%
   select(-files) %>%
   unnest(cols=diag) %>% 
-  filter(Rhat > 1.02)
+  filter(Rhat > 1.02) %>%
+  arrange(desc(Rhat))
 
 diagnostic_df %>%
   select(-files) %>%

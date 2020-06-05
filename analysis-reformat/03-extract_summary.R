@@ -7,8 +7,10 @@
 #    - Ysim - simulated cases and quantiles
 
 
-source('analysis-reformat/00-PARAMS.R')
-source('/data/covid/tmp/2020-05-24/00-PARAMS.R')
+#source('analysis-reformat/00-PARAMS.R')
+source('/data/covid/tmp/2020-06-01/00-PARAMS.R')
+
+
 source('analysis-reformat/00-functions.R')
 # Uses zoom_stan()
 
@@ -123,10 +125,7 @@ summary_Ysim <-
 
 ##############################################
 # Create a tibble with one row per county/date
-
-
 ########################################################
-# Set up a county/date sf object
 data_out <- 
   crossing(
     county_df %>% select(geoid, mygeoid, i, mystate, state_name, county_name, pop), 

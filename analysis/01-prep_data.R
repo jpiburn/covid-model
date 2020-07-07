@@ -1,4 +1,3 @@
-
 library(tidyverse)
 library(lubridate)
 library(rstan)
@@ -7,10 +6,8 @@ library(doParallel)
 library(covidmodeldata)
 ################################################################################
 
-source('analysis-reformat/00-PARAMS.R')
-source('analysis-reformat/00-functions.R')
-source('analysis-reformat/00-proc_covid.R')
-source('analysis-reformat/00-proc_county.R')
+source('analysis/00-PARAMS.R')
+source('analysis/00-functions.R')
 
 if(CLEAN_DIR) {
   unlink(DATA_DIR, recursive=TRUE)
@@ -21,8 +18,6 @@ if (is.null(NYT_FILE)) {
   
   nyt_data <- get_nyt() %>%
     format_nyt(distribute_unknowns = FALSE) # Assign KC, but that's it.
-  
-  #    format_nyt(skip_assignment = c("09","44")) # don't assign Rhode Island cases 
   
 } else nyt_data <- read_csv(NYT_FILE)
 nyt_data <- mutate(nyt_data, date=as_date(date))
@@ -93,15 +88,6 @@ T <- as.integer(max(covid_df$date)-as_date(DATE_0)+1)
 
 L <- pracma::tril(toeplitz(c(1,-2,1, rep(0, T+TPRED-4 ))))
 
-#D <- 1+10*exp(-3/14*seq(1,nrow(L)))
-#D <- diag(rev(pmin(seq(from=1/28,by=1/28, length.out=nrow(L)),1)))
-
-#L <- L %*% diag(D)
-# D11 <- (Dbig%*%t(Dbig))[1:(NTIME-1-TPRED),1:(NTIME-1-TPRED)]
-# D12 <- (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1),1:(NTIME-1-TPRED)]
-# D22 = (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1), (NTIME-1-TPRED+1):(NTIME-1)]
-# 
-# pred_cov <- 
 # Create a spline over observable time
 svd <- svd(L[1:(T-1),1:(T-1)])
 Z <- svd$v %*% diag(1/svd$d)
@@ -139,10 +125,8 @@ sd_scale <- log(10^2) / sqrt(max_var)
 if(!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive=TRUE)
 save(covid_df, county_df, X_dow, Z, date_df, 
      file=file.path(DATA_DIR, 'data_frames.Rdata'))
-file.copy(from = 'analysis-reformat/00-PARAMS.R',
+file.copy(from = 'analysis/00-PARAMS.R',
           to = file.path(DATA_DIR, '00-PARAMS.R'))
-
-
 
 
 # We need a list of states to loop through.
@@ -158,14 +142,6 @@ state_list <- county_df %>%
   arrange(desc(n)) %>%
   pull(mystate)
 
-#state_list <- state_list[c(20:25)]
-
-#state_list <- c('15','44','02','56','30')
-#state_list <- '09'
-
-if(TN_ONLY) state_list <- '47'
-
-
 #####################################################
 # CREATE A LIST WITH ONE ENTRY PER CHAIN (50 * NITER)
 # 
@@ -179,8 +155,6 @@ for(i in 1:length(state_list)){
   # Create sample directory
   STATE_SAMPLES_DIR <- file.path(SAMPLES_ROOT, DATE, STATE_FIPS)
   if(!dir.exists(STATE_SAMPLES_DIR)) dir.create(STATE_SAMPLES_DIR, recursive=TRUE)
-  
-  
   
   
   ####################

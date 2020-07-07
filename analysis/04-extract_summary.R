@@ -7,10 +7,9 @@
 #    - Ysim - simulated cases and quantiles
 
 
-#source('analysis-reformat/00-PARAMS.R')
+#source('analysis/00-PARAMS.R')
 source('/covidmodeldata/2020-06-24/00-PARAMS.R')
-source('analysis-reformat/00-functions.R')
-# Uses zoom_stan()
+source('analysis/00-functions.R')
 
 library(tidyverse)
 library(sf)

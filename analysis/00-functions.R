@@ -428,3 +428,262 @@ plot_run_time <- function(diagnostic_df) {
   
   chain_plot
 }
+
+
+
+################################################################################
+# Define the geographic hierarch and pull out descriptive data for counties.
+# Create a county_df data_frame with columns
+#   geoid
+#   mygeoid
+#   pop
+#   county_name
+#   state_name
+#   i: a sequenctial county code
+#   j1: a sequential level 1 code
+#   j2: a sequential level 2 code
+
+proc_county <- function(raw_data, geoid.list){
+  if(any(class(raw_data)=='sf')) raw_data <- raw_data %>% sf::st_drop_geometry()
+  
+  expected_cols <- c('geoid', 'state_name', 'csa_code', 'csa_title', 'metropolitan_micropolitan_statistical_area',
+                     'acs_total_pop_e')
+  for( i in expected_cols){
+    if ( !(i %in% colnames(raw_data))) error(sprintf('expected column named %s in raw_data', i))
+  }
+  
+  # filter out missing counties and create sequential id
+  county_df <- 
+    raw_data %>%
+    filter(geoid %in% geoid.list) %>%
+    mutate(mygeoid = ifelse(geoid=='11001', '24XDC', geoid)) %>% # add DC to Maryland
+    mutate(mystate = substring(mygeoid,1,2)) %>%
+    group_by(mystate) %>%
+    mutate(i = row_number())
+  
+  ##################################################
+  # Create a metro code within each state:
+  # Our metro hierarchy will be a metro/nonmetro, then by csa within metros
+  # Csa do include micropolitans, but we'll exclude those from metro
+  # First, recode metros to try to delete one county groups
+  
+  metro_recode_df <-
+    county_df %>%
+    select(geoid, mygeoid, mystate, metropolitan_micropolitan_statistical_area, csa_code, csa_title) %>%
+    mutate(
+      metro = forcats::fct_explicit_na(metropolitan_micropolitan_statistical_area) == 'Metropolitan Statistical Area'
+    ) %>%
+    # Change Connecticut, whch has one non-metro county (Litchfield) to metro.
+    mutate(metro = if_else(mygeoid == '09005', TRUE, metro)) %>%
+    mutate(
+      my_metro_code= as.character(forcats::fct_explicit_na(csa_code, na_level='998'))
+    )  %>%
+    mutate(
+      my_metro_title = if_else(is.na(csa_title), 'not_csa', csa_title)
+    ) %>% 
+    mutate(
+      my_metro_code = ifelse(metro, my_metro_code, '999')
+    ) %>%
+    mutate(
+      my_metro_title = if_else(metro, my_metro_title, 'not_metro')
+    ) %>%
+    # Calculate number of counties in each group
+    group_by(
+      mystate, 
+      my_metro_code, 
+      my_metro_title) %>%
+    mutate(
+      num_counties = n()) %>%
+    ungroup()   %>%
+    # Recode any csas with only one or two counties
+    mutate(
+      my_metro_code = ifelse(metro & num_counties <= 2, '998', my_metro_code),
+      my_metro_title = ifelse(metro & num_counties <= 2, 'not_csa', my_metro_title),
+    ) %>%
+    # ReCalculate number of counties in each group
+    group_by(
+      mystate, 
+      my_metro_code, 
+      my_metro_title) %>%
+    mutate(
+      num_counties = n()) 
+  
+  # Create a dataset with one row per metro area, and a unique id 'j'
+  metro_j_df <- metro_recode_df %>%
+    # Summarize csas
+    group_by(
+      mystate, 
+      my_metro_title, 
+      my_metro_code) %>%
+    summarize(
+      n=n()) %>%
+    # give index values
+    arrange(mystate, my_metro_code) %>%
+    group_by(
+      mystate) %>%
+    mutate(
+      j = row_number()
+    ) 
+  
+  # Add j back to the county database
+  metro_recode_df <- metro_recode_df %>%
+    left_join(
+      metro_j_df,
+      by = c('mystate', 'my_metro_code', 'my_metro_title')) %>%
+    select(
+      geoid, 
+      mygeoid, 
+      mystate,
+      metro,
+      my_metro_code,
+      my_metro_title,
+      j
+    ) %>%
+    # set j=0 if non-metro
+    mutate(group1 = ifelse(metro, j, 0),
+           group2 = ifelse(metro, 1, 2),
+           group2_name = ifelse(metro, 'Metropolitan', 'Non-Metropolitan'),
+           group1_name = my_metro_title)
+  
+  county_df <-
+    county_df %>%
+    ungroup() %>%
+    left_join(
+      metro_recode_df,
+      by=c('geoid','mygeoid','mystate')) %>%
+    select(geoid, mygeoid, mystate, state_name, county_name, i, group1, group2, group1_name, group2_name, pop=acs_total_pop_e)
+  
+  return(county_df)
+  
+}
+
+
+
+################################################################################
+# Create a covid_df data_frame with columns
+#   geoid
+#   date
+#   Y (new_cases)
+#   new_cases
+
+# The data should extend from ZERO_PAD (7?) days before the first record to the current time.
+
+
+proc_covid <- function(raw_data, DATE_0, ZERO_PAD){
+  require(tidyverse)
+  #library(lubridate)
+  #library(covidmodeldata)
+  ################################################################################
+  
+  if(! ('date' %in% colnames(raw_data))) stop('Expected column called date in raw_date')
+  if(! ('geoid' %in% colnames(raw_data))) stop('Expected column called geoid in raw_date')
+  if(! ('total_cases' %in% colnames(raw_data))) stop('Expected column called total_cases in raw_date')
+  
+  raw_data <- raw_data %>%
+    filter(!is.na(geoid))
+  
+  LAST_DAY = max(raw_data$date)
+  GEOIDS <- unique(raw_data$geoid)
+  
+  # Create a data_frame with every day, county, and cases
+  covid_df <- 
+    crossing(
+      geoid = unique(raw_data$geoid),
+      date  = seq.Date(from=as.Date(DATE_0), to=max(raw_data$date), by=1) ) %>%
+    left_join(
+      nyt_data %>%
+        select(geoid,
+               date,
+               total_cases)
+    )
+  
+  
+  # Filter to only include days after ZERO_PAD
+  covid_df <- 
+    covid_df %>%
+    group_by(
+      geoid) %>%
+    mutate(
+      first_day = min(date[!is.na(total_cases)])
+    ) %>%
+    filter(
+      date >= first_day - ZERO_PAD
+    ) %>%
+    ungroup() %>%
+    arrange(
+      geoid, 
+      date
+    ) 
+  
+  
+  #########################################################
+  # Remove the negative cases;
+  # the way I will do this is by making sure  that the confirmed cases is monotonic, then recomputing new cases as difference
+  
+  covid_df <- 
+    covid_df %>%
+    group_by(
+      geoid) %>%
+    arrange(
+      geoid,
+      desc(date)) %>%
+    mutate(
+      future_min = cummin(total_cases)) %>%
+    arrange(
+      geoid,
+      date) %>%
+    mutate(
+      future_min = ifelse(date < first_day, 0, future_min),
+      Y = future_min - lag(future_min, n = 1L, default = 0)
+    ) %>%
+    ungroup() %>%
+    arrange(
+      geoid,
+      date
+    ) %>%
+    select(
+      -first_day,
+      -future_min
+    ) %>%
+    mutate(t = as.integer(date-as.Date(DATE_0) + 1))
+  return(covid_df)
+}
+
+remove_prisons <- function(covid_df, county_df){
+  expected_cols <- c('geoid', 'date', 'Y')
+  for( i in expected_cols){
+    if ( !(i %in% colnames(covid_df))) stop(sprintf('expected column named %s in covid_df', i))
+  }
+  
+  expected_cols <- c('geoid', 'pop')
+  for( i in expected_cols){
+    if ( !(i %in% colnames(county_df))) stop(sprintf('expected column named %s in county_df', i))
+  }
+  
+  # Filter for huge jumps that are likely prisons
+  covid_df <- covid_df %>%
+    left_join(
+      county_df %>%
+        select(geoid, pop),
+      by='geoid') %>%
+    arrange(geoid, date) %>%
+    mutate(Yold = Y)
+  
+  MAX <- 0
+  for(i in 2:nrow(covid_df)){
+    if(covid_df$geoid[i]!=covid_df$geoid[i-1]) MAX = 0
+    if(is.na(covid_df$Y[i])) {next}
+    if(covid_df$pop[i] > 30000) {next}
+    if (covid_df$Y[i] > 20 & 
+        sum(covid_df$Yold[(i-1):(i+1)], na.rm=TRUE) > 50 & 
+        sum(covid_df$Yold[(i-1):(i+1)], na.rm=TRUE) > 8*MAX
+    ) covid_df$Y[i] <- NA
+    if (!is.na(covid_df$Y[i]) & covid_df$Y[i]>MAX) MAX = covid_df$Y[i]
+  }
+  return(
+    covid_df %>% select(-Yold)
+  )
+}
+
+
+

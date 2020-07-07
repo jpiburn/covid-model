@@ -8,16 +8,15 @@ library(covidmodeldata)
 library(future)
 library(furrr)
 
-
 # load data and parameters ------------------------------------------------
-source('analysis-reformat/00-PARAMS.R')
+source('analysis/00-PARAMS.R')
 load(file.path(DATA_DIR, "stan_fit_list.Rdata"))
 
 
 # create cluster connections ----------------------------------------------
 
 worker_ips <- cades_workers$ip_address # from 00-PARAMS.R
-worker_ips <- setdiff(worker_ips, c('172.22.3.211','172.22.3.204', '172.22.3.203'))
+worker_ips <- setdiff(worker_ips, c('172.22.3.211','172.22.3.204', '172.22.3.203')) # these ips wouldnt connect and I never bothered to look into it
 
 # Connect and create a cluster
 cl <- makeClusterPSOCK(
@@ -44,7 +43,7 @@ stan_fit_list_split <- clusterSplit(cl, stan_fit_list)
 
 
 # compile stan model ------------------------------------------------------
-stan_mod <- stan_model(file='analysis-reformat/nb1_spline.stan', model_name='nb1_spline')
+stan_mod <- stan_model(file='analysis/nb1_spline.stan', model_name='nb1_spline')
 
 
 # initialize function -----------------------------------------------------

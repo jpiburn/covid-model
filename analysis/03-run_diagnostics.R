@@ -1,7 +1,7 @@
 
 
 source('/covidmodeldata/2020-06-24/00-PARAMS.R')
-source('analysis-reformat/00-functions.R')
+source('analysis/00-functions.R')
 
 library(tidyverse)
 library(tidyselect)
@@ -50,8 +50,6 @@ cl <- makeClusterPSOCK(
 plan(list(tweak(cluster, workers = cl), multiprocess))
 
 
-
-
 # group split for cluster -------------------------------------------------
 diagnostic_list <- 
   tibble(State = strsplit(FIPS, split=' ')[[1]]) %>%
@@ -96,25 +94,6 @@ diagnostic_df <- future_map(
 
 diagnostic_df <- bind_rows(diagnostic_df)
 
-
-
-
-# diagnostic_df <- diagnostic_df %>%
-#   mutate(
-#     diag = future_map(
-#       .x=files,
-#       ~read_and_diagnose(.x, warmup=WARMUP/NTHIN,
-#                          par_select=c(starts_with('phi'),
-#                                       starts_with('tau'),
-#                                       starts_with('log_lambda'))
-#                          )
-#       )
-#     )
-
-# timing info as well as other chain parameters
-# diagnostic_df <- mutate(diagnostic_df,
-#     chain_info = future_map(files, get_sampling_params)
-#   )
 
 ###################################################################
 # Determine which chains to use here....
@@ -169,6 +148,7 @@ save(diagnostic_df, file=DIAG_DF_LOC)
 save(diagnostic_df, file="results/2020-06-24/diagnostic.Rdata")
 
 
-stopCluster(cl)
+# closing cluster ---------------------------------------------------------
+plan(sequential)
 
 

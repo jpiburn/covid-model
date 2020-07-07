@@ -1,4 +1,7 @@
 
+# This is used b/c of weird permission issues when running the sricpt through Rstudio vs R cmd
+# probaly won't need it
+
 library(tidyverse)
 library(lubridate)
 library(rstan)

@@ -3,9 +3,10 @@ library(tidyverse)
 library(sf)
 library(covidmodeldata)
 
-load("/home/cades/old-stuff/covid-model-master/results_2020-05-28.RData")
+# load("/home/cades/old-stuff/covid-model-master/results_2020-05-28.RData")
 
-last_obs_date <- as.Date("2020-05-27")
+load("results_2020-06-03.RData")
+last_obs_date <- as.Date("2020-06-03")
 
 df_pred <- data_out %>%
   select(
@@ -56,8 +57,10 @@ df_forecast <- df %>%
     counties_min_200 = if_else(geoid %in% counties_min_200, TRUE, FALSE),
     counties_min_500 = if_else(geoid %in% counties_min_500, TRUE, FALSE),
     counties_min_1000 = if_else(geoid %in% counties_min_1000, TRUE, FALSE)
-  ) %>%
-  filter(!is.na(new_cases))
+  )
+
+#%>%
+  #filter(!is.na(new_cases))
 
 df_forecast %>% 
   #group_by(metro) %>% 
@@ -74,15 +77,16 @@ df_forecast %>%
 
 df_forecast %>%
   filter(
-    #state_fips == "47",
-    date >= as.Date("2020-05-14"),
+    state_fips == "47",
+    #county_name == "Knox"
+    #date >= as.Date("2020-05-14"),
    pop > 50000,
-   state_name == "North Carolina"
+   #state_name == "North Carolina"
   ) %>%
   ggplot(
     aes(x = date, y= new_cases, group = county_name)
   ) +
-  geom_vline(xintercept = as.Date("2020-05-27"), size = .8, linetype=2, color = "dark grey") +
+  geom_vline(xintercept = as.Date("2020-06-03"), size = .8, linetype=2, color = "dark grey") +
   geom_ribbon(aes(ymin = Ysim_q05, ymax = Ysim_q95), alpha = 0.1, fill = "blue") +
   geom_ribbon(aes(ymin = Ysim_q25, ymax = Ysim_q75), alpha = 0.3, fill = "blue") +
   geom_line(aes(y = pop*lambda_q50), color = "blue", size = 1.2) +

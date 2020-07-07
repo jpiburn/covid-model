@@ -305,7 +305,7 @@ read_and_diagnose <- function(files, par_select, warmup = 0) {
       .chain = 1:n()
     ) %>%
     mutate(
-      samples = map(.x = files, ~fread_stan(.x, col_select = all_of(!!par_enquo)))
+      samples = future_map(.x = files, ~fread_stan(.x, col_select = all_of(!!par_enquo)))
     ) %>%
     mutate(
       samples = map(.x=samples, 

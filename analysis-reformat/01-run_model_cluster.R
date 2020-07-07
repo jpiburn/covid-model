@@ -1,49 +1,32 @@
-
-#library(sf)
+# load libraries ----------------------------------------------------------
 library(tidyverse)
 library(lubridate)
 library(rstan)
-#library(tidybayes)
 library(foreach)
 library(doParallel)
 library(covidmodeldata)
 library(future)
 library(furrr)
-##########################
-######################################################
-# COMPILE MODEL
-# Negative Binomial with Gaussian Random Walk on slope
-
-stan_mod <- stan_model(file='covid-model-master/analysis-reformat/nb1_spline.stan', model_name='nb1_spline')
 
 
+# load data and parameters ------------------------------------------------
+source('analysis-reformat/00-PARAMS.R')
+load(file.path(DATA_DIR, "stan_fit_list.Rdata"))
 
 
+# create cluster connections ----------------------------------------------
 
-#################################################################
-# Fit model here
-######################################################
-# Set up cluster here
-# cl <- makeCluster(NNODES)
-# registerDoParallel(cl)
-
-# Public IP for droplet(s); this can also be a vector of IP addresses
-ip <- c('172.22.3.223', '172.22.3.218', '172.22.3.222', '172.22.3.219', '172.22.3.212', 
-        '172.22.3.217', '172.22.3.220', '172.22.3.209', '172.22.3.221')
-
-# '172.22.3.211'
-
-# Path to private SSH key that matches key uploaded to DigitalOcean
-ssh_private_key_file <- "covid-model/id_rsa"
+worker_ips <- cades_workers$ip_address # from 00-PARAMS.R
+worker_ips <- setdiff(worker_ips, c('172.22.3.211','172.22.3.204', '172.22.3.203'))
 
 # Connect and create a cluster
 cl <- makeClusterPSOCK(
-  ip,
+  worker_ips,
   user = "root",
   rshopts = c(
     "-o", "StrictHostKeyChecking=no",
     "-o", "IdentitiesOnly=yes",
-    "-i", ssh_private_key_file
+    "-i", SSH_KEY
   ),
   # Command to run on each remote machine
   # --net=host allows it to communicate back to this computer
@@ -53,17 +36,18 @@ cl <- makeClusterPSOCK(
   verbose = TRUE
 )
 
-
-
-
 plan(list(tweak(cluster, workers = cl), multiprocess))
 
+
+# split stan fit list -----------------------------------------------------
 stan_fit_list_split <- clusterSplit(cl, stan_fit_list)
 
 
+# compile stan model ------------------------------------------------------
+stan_mod <- stan_model(file='analysis-reformat/nb1_spline.stan', model_name='nb1_spline')
 
-##############################################
-# Initialize function
+
+# initialize function -----------------------------------------------------
 init_fun <- function(chain_id) list( a = runif(1,-13,-9),
                                      tau_a0 = runif(1,0,.02),
                                      tau_a1 = runif(1,0,.02),
@@ -74,11 +58,9 @@ init_fun <- function(chain_id) list( a = runif(1,-13,-9),
                                      phi = runif(1,.1,.9))
 
 
-
-start_time <- system.time()
+# running model -----------------------------------------------------------
 r <- future_map(
-  
-  # Map over the 10 instances
+  # cluster of workers
   .x = stan_fit_list_split, 
   
   .f = ~ {
@@ -87,14 +69,14 @@ r <- future_map(
     
     future_map(
       
-      # Each instance has 32 cores we can utilize
+      # multiprocess within each worker
       .x = 1:length(outer_idx), 
       
       .f = ~ {
         inner_idx <- .x
         stan_fit <- try(sampling(object =          stan_mod,
                                  data =            outer_idx[[inner_idx]]$stan_data,
-                                 iter =            NITER, 
+                                 iter =            NITER,
                                  thin =            NTHIN,
                                  chains =          1,
                                  cores =           1,
@@ -102,12 +84,21 @@ r <- future_map(
                                  sample_file =     outer_idx[[inner_idx]]$sample_file,
                                  append_samples =  FALSE,
                                  init =            init_fun,
-                                 control =         list(adapt_delta = 0.90, max_treedepth=12)) ) 
-      }
+                                 control =         list(adapt_delta = 0.90, max_treedepth=12))
+                        )
+
+        readr::write_lines(x = outer_idx[[inner_idx]]$sample_file, file.path(DATA_DIR, "chain_checkout.txt"), append = TRUE)
+        
+        }
     )
     
   }
 )
-stop_time <- system.time()
 
+
+# closing cluster ---------------------------------------------------------
 plan(sequential)
+
+
+
+

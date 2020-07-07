@@ -3,19 +3,20 @@ library(tidyverse)
 library(sf)
 library(covidmodeldata)
 
-load("/home/cades/old-stuff/covid-model-master/results_2020-05-28.RData")
+#load("/home/cades/old-stuff/covid-model-master/results_2020-05-28.RData")
 
+load("results_2020-06-03.RData")
 
 df_map <- 
   data_out %>% 
   filter(
-    date >= as.Date("2020-05-21")
+    date >= as.Date("2020-05-28")
   ) %>%
   mutate(
     lambda_pop = lambda_q50 * pop,
     lambda_pop = if_else(lambda_pop <= 0, 0, lambda_pop),
     new_cases = if_else(new_cases <= 0, 0, new_cases),
-    week = if_else(date <= as.Date("2020-05-27"), "this week", "next week")
+    week = if_else(date <= as.Date("2020-06-03"), "this week", "next week")
   ) %>% 
   group_by(geoid, state_name, county_name, week) %>%
   summarise(
@@ -78,7 +79,7 @@ df_map %>%
     panel.grid = element_blank(),
     axis.text = element_blank()
   ) 
-ggsave("covid-model-master/next-week.svg", height = 8, width = 12, units = "in", dpi = 800, bg = "transparent")
+ggsave("next-week.svg", height = 8, width = 12, units = "in", dpi = 800, bg = "transparent")
 
 
 
@@ -106,7 +107,7 @@ df_map %>%
     panel.grid = element_blank(),
     axis.text = element_blank()
   ) 
-ggsave("covid-model-master/this-week.svg", height = 8, width = 12, units = "in", dpi = 800, bg = "transparent")
+ggsave("this-week.svg", height = 8, width = 12, units = "in", dpi = 800, bg = "transparent")
 
 
 

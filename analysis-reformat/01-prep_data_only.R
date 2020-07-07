@@ -1,8 +1,7 @@
-#library(sf)
+
 library(tidyverse)
 library(lubridate)
 library(rstan)
-#library(tidybayes)
 library(foreach)
 library(doParallel)
 library(covidmodeldata)
@@ -13,7 +12,10 @@ source('analysis-reformat/00-functions.R')
 source('analysis-reformat/00-proc_covid.R')
 source('analysis-reformat/00-proc_county.R')
 
-#if(CLEAN_DIR) unlink(DATA_DIR, recursive=TRUE)
+if(CLEAN_DIR) {
+  unlink(DATA_DIR, recursive=TRUE)
+  print(glue::glue("{DATA_DIR} removed before rewriting"))
+  }
 
 if (is.null(NYT_FILE)) {
   
@@ -23,7 +25,7 @@ if (is.null(NYT_FILE)) {
   #    format_nyt(skip_assignment = c("09","44")) # don't assign Rhode Island cases 
   
 } else nyt_data <- read_csv(NYT_FILE)
-nyt_data <- mutate(nyt_data, date = lubridate::as_date(date))
+nyt_data <- mutate(nyt_data, date=as_date(date))
 
 # Create tibble with cols
 #  geoid
@@ -36,7 +38,8 @@ covid_df <- proc_covid(
   DATE_0 = DATE_0,
   ZERO_PAD = ZERO_PAD
 ) %>%
-  left_join(nyt_data %>% select(geoid, date, new_cases))
+  left_join(nyt_data %>% select(geoid, date, new_cases)) %>%
+  filter(date <= min(as_date(DATE_N), as_date(DATE)))
 
 
 if (is.null(ACS_FILE)) {
@@ -90,6 +93,10 @@ T <- as.integer(max(covid_df$date)-as_date(DATE_0)+1)
 
 L <- pracma::tril(toeplitz(c(1,-2,1, rep(0, T+TPRED-4 ))))
 
+#D <- 1+10*exp(-3/14*seq(1,nrow(L)))
+#D <- diag(rev(pmin(seq(from=1/28,by=1/28, length.out=nrow(L)),1)))
+
+#L <- L %*% diag(D)
 # D11 <- (Dbig%*%t(Dbig))[1:(NTIME-1-TPRED),1:(NTIME-1-TPRED)]
 # D12 <- (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1),1:(NTIME-1-TPRED)]
 # D22 = (Dbig%*%t(Dbig))[(NTIME-1-TPRED+1):(NTIME-1), (NTIME-1-TPRED+1):(NTIME-1)]
@@ -126,11 +133,11 @@ krig_wt <- rbind(0, krig_wt)
 # variance on last day is:
 max_var <- Cov[T,T]
 # sd that should give us log(10^4) change  
-sd_scale <- log(10^4) / sqrt(max_var)
+sd_scale <- log(10^2) / sqrt(max_var)
 
 
-# if(!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive=TRUE)
-save(covid_df, county_df, X_dow, Z, date_df,
+if(!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive=TRUE)
+save(covid_df, county_df, X_dow, Z, date_df, 
      file=file.path(DATA_DIR, 'data_frames.Rdata'))
 file.copy(from = 'analysis-reformat/00-PARAMS.R',
           to = file.path(DATA_DIR, '00-PARAMS.R'))
@@ -154,7 +161,7 @@ state_list <- county_df %>%
 #state_list <- state_list[c(20:25)]
 
 #state_list <- c('15','44','02','56','30')
-# state_list <- '09'
+#state_list <- '09'
 
 if(TN_ONLY) state_list <- '47'
 
@@ -244,16 +251,21 @@ for(i in 1:length(state_list)){
   )
   
   for(j in 1:NCHAINS){
-    stan_fit_list[[slot]] <- list(stan_data=stan_data,
-                                  sample_file = file.path(STATE_SAMPLES_DIR, paste0('samples_grw_',j,'.csv')),
-                                  diagnostic_file = file.path(STATE_SAMPLES_DIR, paste0('diagnostic_grw_',j,'.csv')),
+    
+    sample_file_name <- file.path(STATE_SAMPLES_DIR, paste0('samples_grw_',j,'.csv'))
+    diagnostic_file_name <- file.path(STATE_SAMPLES_DIR, paste0('diagnostic_grw_',j,'.csv'))
+    
+    stan_fit_list[[slot]] <- list(stan_data   = stan_data,
+                                  sample_file = sample_file_name,
+                                  diagnostic_file = diagnostic_file_name,
                                   Xdf = Xdf,
                                   covid_df = this_covid_df)
     slot = slot + 1
   }
   stan_dat <- stan_fit_list[[slot-1]]
-  save(stan_dat, file = file.path(dirname(stan_fit_list[[slot-1]]$sample_file), 'standata.RData'))
+  save(stan_dat, 
+       file = file.path(dirname(stan_fit_list[[slot-1]]$sample_file), 'standata.RData'))
 }
 
-
+save(stan_fit_list, file=file.path(DATA_DIR, 'stan_fit_list.Rdata'))
 

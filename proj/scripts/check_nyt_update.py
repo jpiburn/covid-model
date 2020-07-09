@@ -30,4 +30,4 @@ if __name__ == "__main__":
                                        stderr=subprocess.PIPE)
             stdout, stderr = process.communicate()
             county_date = retrieve_date()
-        time.sleep(500)
+        time.sleep(3600)

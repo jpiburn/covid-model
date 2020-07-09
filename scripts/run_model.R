@@ -1,27 +1,21 @@
 #!/usr/bin/env Rscript
-#' @title     this is the command line script to create the models
-#' 
-# DATE <- '2020-06-24' # Date of run -- replaced with below
-# DATE <- format(Sys.Date(), format = '%Y-%m-%d')
-library(data.table)
-library(tidyr)
-library(dplyr)
-library(snakecase)
-library(tidycensus)
-library(tidyselect)
-library(tidyverse)
-library(lubridate)
-library(rstan)
-library(parallel)
-library(doParallel)
-library(foreach)
-library(covidmodeldata)
-library(future)
-library(furrr)
-library(rlang)
-library(ggplot2)
-library(hms)
-library(sf)
+loadPackages <- function(pkgs, repo = 'https://cloud.r-project.org',
+                         lib = .libPaths()[1]) {
+  not_installed <- pkgs[!pkgs %in% rownames(installed.packages())]
+  install.packages(not_installed, repos = repo, lib = lib)
+  loaded <- unlist(lapply(pkgs, require, character.only = TRUE, quietly = TRUE))
+  if (any(loaded == FALSE)) {
+    message(sprintf('The following packages failed to load: %s',
+                    paste0(pkgs[!loaded], collapse = ', ')))
+    return(FALSE)
+  }
+  return(TRUE)
+}
+pkgs <- c('data.table', 'tidyr', 'dplyr', 'snakecase', 'tidyverse', 
+          'tidycensus', 'tidyselect', 'lubridate', 'rstan', 'parallel',
+          'doParallel', 'foreach', 'future', 'furrr', 'rlang', 'ggplot2',
+          'hms', 'sf')
+stopifnot(loadPackages(pkgs))
 # original notes --------------------------------------------------------- {{{1
 # This is used b/c of weird permission issues when running the sricpt through 
 # Rstudio vs R cmd probaly won't need it

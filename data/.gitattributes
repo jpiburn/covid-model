@@ -1,0 +1,5 @@
+2020-03-30-covid19-nyt.csv filter=lfs diff=lfs merge=lfs -text
+2020-04-08-covid19-nyt.csv filter=lfs diff=lfs merge=lfs -text
+us-acs.RData filter=lfs diff=lfs merge=lfs -text
+washington-acs.RData filter=lfs diff=lfs merge=lfs -text
+washington-covid19.csv filter=lfs diff=lfs merge=lfs -text

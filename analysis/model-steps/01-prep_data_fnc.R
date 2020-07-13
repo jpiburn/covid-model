@@ -7,7 +7,7 @@ prep_data <- function(param_list) {
   library(doParallel)
   library(covidmodeldata)
   
-# define params in environment --------------------------------------------
+ # define params in environment --------------------------------------------
   DATE <- param_list$DATE
   NYT_FILE <- param_list$NYT_FILE
   ACS_FILE <- param_list$ACS_FILE
@@ -16,7 +16,7 @@ prep_data <- function(param_list) {
   SAMPLES_ROOT <- param_list$SAMPLES_ROOT
   NWORKERS <- param_list$NWORKERS
   NNODES <- param_list$NNODES
-  RESULTS_DIR <- param_list$RESULTS_DIR
+  RESULTS_FILE <- param_list$RESULTS_FILE
   UTILS_FUNC_FILE <- param_list$UTILS_FUNC_FILE
   CLEAN_DIR <- param_list$CLEAN_DIR
   SSH_KEY <- param_list$SSH_KEY
@@ -150,8 +150,6 @@ prep_data <- function(param_list) {
   if(!dir.exists(DATA_DIR)) dir.create(DATA_DIR, recursive=TRUE)
   save(covid_df, county_df, X_dow, Z, date_df, 
        file=file.path(DATA_DIR, 'data_frames.Rdata'))
-  file.copy(from = 'analysis/00-PARAMS.R',
-            to = file.path(DATA_DIR, '00-PARAMS.R'))
   
   
   # We need a list of states to loop through.

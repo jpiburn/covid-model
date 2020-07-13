@@ -569,7 +569,7 @@ proc_county <- function(raw_data, geoid.list){
 # The data should extend from ZERO_PAD (7?) days before the first record to the current time.
 
 
-proc_covid <- function(raw_data, DATE_0, ZERO_PAD){
+proc_covid <- function(raw_data, nyt_data, DATE_0, ZERO_PAD){
   require(tidyverse)
   #library(lubridate)
   #library(covidmodeldata)

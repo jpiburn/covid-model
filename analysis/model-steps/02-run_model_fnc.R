@@ -48,7 +48,7 @@ run_model <- function(cl, param_list) {
   # split stan fit list -----------------------------------------------------
   stan_fit_list_split <- clusterSplit(cl, stan_fit_list)
   
-  
+  message('compiling model...')
   # compile stan model ------------------------------------------------------
   stan_mod <- stan_model(file = STAN_MODEL_FILE, model_name = 'nb1_spline')
   
@@ -63,7 +63,7 @@ run_model <- function(cl, param_list) {
                                        raw_tau_splb2 = runif(1,0,2),
                                        phi = runif(1,.1,.9))
   
-  
+  message('running model...')
   # running model -----------------------------------------------------------
   r <- future_map(
     # cluster of workers
@@ -102,7 +102,6 @@ run_model <- function(cl, param_list) {
   )
   
 } # end run_model()
-
 
 
 

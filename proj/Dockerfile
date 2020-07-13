@@ -21,4 +21,6 @@ RUN install2.r --error --deps true StanHeaders rstan loo tidybayes data.table \
 
 COPY ./scripts /tmp/scripts
 
-ENTRYPOINT /tmp/scripts/check_nyt_update.py
+HEALTHCHECK ["curl", "-I", "https://github.com"]
+
+ENTRYPOINT python3 /tmp/scripts/check_nyt_update.py

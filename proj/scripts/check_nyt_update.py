@@ -6,7 +6,8 @@ import subprocess
 from github import Github
 
 # define the command to run
-CMD = ['Rscript', '/home/cades/covid-model/run_model.R']
+CMD = ['sudo', 'Rscript',
+       '/home/cades/covid-model/analysis/01-run-full-model-pipeline.R']
 
 url = 'https://github.com/nytimes/covid-19-data/'
 repo = 'nytimes/covid-19-data'

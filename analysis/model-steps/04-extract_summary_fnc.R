@@ -201,9 +201,37 @@ extract_summary <- function(cl, param_list) {
     ) %>%
     select(-mygeoid, -mystate, -i, -t)
   
+
+  # reformatted prediction results ------------------------------------------
+  df_formatted <- 
+    data_out %>%
+    transmute(
+      geoid,
+      state_name,
+      county_name,
+      date,
+      obs_type = if_else(date <= as.Date(DATE), 'observed', 'predicted'),
+      observed_new_cases = new_cases,
+      estimated_trend_q90_lower  = lambda_q05 * pop,
+      estimated_trend_q70_lower  = lambda_q15 * pop,
+      estimated_trend_q50_lower  = lambda_q25 * pop,
+      estimated_trend_median     = lambda_q50 * pop,
+      estimated_trend_q50_higher = lambda_q75 * pop,
+      estimated_trend_q70_higher = lambda_q85 * pop,
+      estimated_trend_q90_higher = lambda_q95 * pop,
+      estimated_new_cases_q90_lower  = Ysim_q05,
+      estimated_new_cases_q70_lower  = Ysim_q15,
+      estimated_new_cases_q50_lower  = Ysim_q25,
+      estimated_new_cases_median     = Ysim_q50,
+      estimated_new_cases_q50_higher = Ysim_q75,
+      estimated_new_cases_q70_higher = Ysim_q85,
+      estimated_new_cases_q90_higher = Ysim_q95
+    )
+  
   
   # save output -------------------------------------------------------------
   message('saving output predictions')
   dir.create(RESULTS_DIR)
-  save(data_out, file = RESULTS_FILE)
+  save(data_out, file = RESULTS_FILE, showWarnings = FALSE)
+  readr::write_csv(df_formatted, glue::glue('{RESULTS_DIR}/{DATE}_output_predictions.csv.gz'))
 }

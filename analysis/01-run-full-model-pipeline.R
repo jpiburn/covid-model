@@ -109,7 +109,5 @@ extract_summary(cl, param_list)
 
 gen_report_maps(param_list)
 
-format_predictions(param_list)
-
 # closing cluster ---------------------------------------------------------
 plan(sequential)

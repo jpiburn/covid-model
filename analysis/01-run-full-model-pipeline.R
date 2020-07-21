@@ -91,17 +91,17 @@ cl <- makeClusterPSOCK(
   rscript = c("sudo", "docker", "run", "--net=host", "-v", "/covidmodeldata:/covidmodeldata", 
               "rstan/covid", "Rscript"),
   dryrun = FALSE,
-  verbose = FALSE 
+  verbose = TRUE 
 )
 message('cluster ready...')
 
 
 # run each model step -----------------------------------------------------
-#prep_data(param_list)
+prep_data(param_list)
 
-#run_model(cl, param_list)
+run_model(cl, param_list)
 
-#run_diagnostics(cl, param_list)
+run_diagnostics(cl, param_list)
 
 extract_summary(cl, param_list)
 

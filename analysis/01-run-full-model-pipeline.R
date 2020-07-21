@@ -8,10 +8,9 @@ library(covidmodeldata)
 library(future)
 library(furrr)
 
-# I'm not really satistified with how we set the date right now.
-# I know there is a smarter way, but we'll get there soon. fine for now
-DATE <- Sys.Date() - 1
-# DATE <- '2020-07-15'
+max_date_available <- max(covidmodeldata::get_nyt()$date)
+
+DATE <- max_date_available
 SAMPLES_ROOT = '/covidmodeldata'
 DATA_DIR = file.path(SAMPLES_ROOT, DATE)
 RESULTS_DIR <- file.path(SAMPLES_ROOT, 'results', DATE)

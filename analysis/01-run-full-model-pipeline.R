@@ -9,7 +9,6 @@ library(future)
 library(furrr)
 
 max_date_available <- as.character(max(covidmodeldata::get_nyt()$date))
-
 DATE <- max_date_available
 SAMPLES_ROOT = '/covidmodeldata'
 DATA_DIR = file.path(SAMPLES_ROOT, DATE)

@@ -106,7 +106,8 @@ run_diagnostics <- function(cl, param_list) {
     bad_chains %>%
     mutate(
       drop_chain_num = chains_to_drop
-    )
+    ) %>%
+    distinct(State, drop_chain_num)
   
   diagnostic_df <- mutate(diagnostic_df, good_files = files)
   

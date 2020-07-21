@@ -190,7 +190,7 @@ gen_report_maps <- function(param_list) {
   df_acc_daily <-
     df %>%
     mutate(
-      new_cases = if_else(new_cases < 0| is.na(new_cases), 0, new_cases),
+      new_cases = if_else(new_cases < 0 | is.na(new_cases), 0, new_cases),
       estimate = lambda_q50*pop
     ) %>%
     group_by(geoid, state_name, county_name, date) %>%
@@ -245,10 +245,33 @@ gen_report_maps <- function(param_list) {
     ) +
     facet_wrap(~date, nrow = 2)
   
+  
+
+  # accuracy text -----------------------------------------------------------
+  df_acc_text_daily <-
+    df_acc_daily %>% 
+    group_by(date) %>% 
+    summarise(
+      within_90 = mean(within_90, na.rm = TRUE), 
+      within_70 = mean(within_70, na.rm = TRUE), 
+      within_50 = mean(within_50, na.rm = TRUE)
+    )
+  
+  df_acc_text_overall <-
+    df_acc_daily %>% 
+    summarise(
+      within_90 = mean(within_90, na.rm = TRUE), 
+      within_70 = mean(within_70, na.rm = TRUE), 
+      within_50 = mean(within_50, na.rm = TRUE)
+    )
+  
+  
   dir.create(glue::glue('{RESULTS_DIR}/report-plots/'), recursive = TRUE)
   
-  ggsave(glue::glue('{RESULTS_DIR}/report-plots/{DATE}-observed-per-capita-caes-previous-{TPRED}-days.png'), plot = obs_plot, height = 8, width = 12, units = "in", dpi = 600)
-  ggsave(glue::glue('{RESULTS_DIR}/report-plots/{DATE}-observed-per-capita-caes-previous-{TPRED}-days.png'), plot = predict_plot, height = 8, width = 12, units = "in", dpi = 600)
+  readr::write_csv(df_acc_text_daily, glue::glue('{RESULTS_DIR}/report-plots/{DATE}-previous-{TPRED}-days-daily-accuracy-assessment.csv'))
+  readr::write_csv(df_acc_text_overall, glue::glue('{RESULTS_DIR}/report-plots/{DATE}-previous-{TPRED}-days-overall-accuracy-assessment.csv'))
+  ggsave(glue::glue('{RESULTS_DIR}/report-plots/{DATE}-observed-per-capita-cases-previous-{TPRED}-days.png'), plot = obs_plot, height = 8, width = 12, units = "in", dpi = 600)
+  ggsave(glue::glue('{RESULTS_DIR}/report-plots/{DATE}-predicted-per-capita-cases-next-{TPRED}-days.png'), plot = predict_plot, height = 8, width = 12, units = "in", dpi = 600)
   ggsave(glue::glue('{RESULTS_DIR}/report-plots/{DATE}-previous-{TPRED}-days-accuracy-map.png'), plot = plot_daily_acc, height = 8, width = 16, units = "in", dpi = 600)
 
 }

@@ -41,6 +41,15 @@ prep_data <- function(param_list) {
   if (is.null(NYT_FILE)) {
     nyt_data <- get_nyt() %>%
       format_nyt(distribute_unknowns = FALSE) # Assign KC, but that's it.
+    
+    # on 7/14 data for Northern Mariana Islands started being reported.
+    # we dont have population numbers aligned for those currently.
+    # so for now remove any geoids that are not in our population data
+    nyt_data <- nyt_data %>%
+      filter(
+        geoid %in% covidmodeldata::landscan_usa$geoid
+      )
+    
   } else nyt_data <- read_csv(NYT_FILE)
   
   nyt_data <- mutate(nyt_data, date = lubridate::as_date(date))

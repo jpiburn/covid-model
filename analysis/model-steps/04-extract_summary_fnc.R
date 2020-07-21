@@ -232,6 +232,6 @@ extract_summary <- function(cl, param_list) {
   # save output -------------------------------------------------------------
   message('saving output predictions')
   dir.create(RESULTS_DIR)
-  save(data_out, file = RESULTS_FILE, showWarnings = FALSE)
+  save(data_out, file = RESULTS_FILE)
   readr::write_csv(df_formatted, glue::glue('{RESULTS_DIR}/{DATE}_output_predictions.csv.gz'))
 }

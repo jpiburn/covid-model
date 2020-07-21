@@ -569,7 +569,7 @@ proc_county <- function(raw_data, geoid.list){
 # The data should extend from ZERO_PAD (7?) days before the first record to the current time.
 
 
-proc_covid <- function(raw_data, nyt_data, DATE_0, ZERO_PAD){
+proc_covid <- function(raw_data, nyt_data, DATE_0, ZERO_PAD) {
   require(tidyverse)
   #library(lubridate)
   #library(covidmodeldata)
@@ -649,7 +649,7 @@ proc_covid <- function(raw_data, nyt_data, DATE_0, ZERO_PAD){
   return(covid_df)
 }
 
-remove_prisons <- function(covid_df, county_df){
+remove_prisons <- function(covid_df, county_df) {
   expected_cols <- c('geoid', 'date', 'Y')
   for( i in expected_cols){
     if ( !(i %in% colnames(covid_df))) stop(sprintf('expected column named %s in covid_df', i))

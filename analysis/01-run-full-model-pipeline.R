@@ -10,8 +10,8 @@ library(furrr)
 
 # I'm not really satistified with how we set the date right now.
 # I know there is a smarter way, but we'll get there soon. fine for now
-DATE <- Sys.Date() - 1
-# DATE <- '2020-07-08'
+# DATE <- Sys.Date() - 1
+DATE <- '2020-07-15'
 SAMPLES_ROOT = '/covidmodeldata'
 DATA_DIR = file.path(SAMPLES_ROOT, DATE)
 RESULTS_DIR <- file.path(SAMPLES_ROOT, 'results', DATE)
@@ -95,15 +95,15 @@ cl <- makeClusterPSOCK(
   dryrun = FALSE,
   verbose = FALSE 
 )
-
+message('cluster ready...')
 
 
 # run each model step -----------------------------------------------------
-prep_data(param_list)
+#prep_data(param_list)
 
-run_model(cl, param_list)
+#run_model(cl, param_list)
 
-run_diagnostics(cl, param_list)
+#run_diagnostics(cl, param_list)
 
 extract_summary(cl, param_list)
 
